@@ -32,13 +32,21 @@ class SearchIndex:
     def _rank(self, query_vec: np.ndarray, top_k: int, exclude: int | None = None) -> list[dict]:
         # query_vec: (D,) normalized. Cosine sim vs every image = one matmul.
         scores = self.matrix @ query_vec
-        order = np.argsort(-scores)
+
+        # Top-k via argpartition (O(N)) instead of a full O(N log N) sort: we only
+        # need the best `k` candidates, then sort just those. Grab one extra so an
+        # excluded id can't shrink the result below top_k.
+        k = min(top_k + (1 if exclude is not None else 0), scores.shape[0])
+        candidates = np.argpartition(-scores, k - 1)[:k]
+        order = candidates[np.argsort(-scores[candidates])]
+
         results = []
         for idx in order:
-            if exclude is not None and int(idx) == exclude:
+            i = int(idx)
+            if exclude is not None and i == exclude:
                 continue
-            item = dict(self.images[int(idx)])
-            item["score"] = round(float(scores[int(idx)]), 4)
+            item = dict(self.images[i])
+            item["score"] = round(float(scores[i]), 4)
             results.append(item)
             if len(results) >= top_k:
                 break
