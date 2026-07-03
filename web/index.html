@@ -40,33 +40,46 @@
 
     <!-- Search bar -->
     <div class="rounded-2xl border border-white/10 bg-white/5 p-4 backdrop-blur">
-      <div class="flex flex-col gap-3 sm:flex-row">
-        <input id="q" type="text" autocomplete="off"
-          placeholder="e.g. a dog on the beach, a red car, city at night…"
-          class="flex-1 rounded-xl border border-white/10 bg-black/30 px-4 py-3 text-base outline-none placeholder:text-slate-500 focus:border-indigo-400/60 focus:ring-2 focus:ring-indigo-500/30" />
-        <button id="go"
-          class="rounded-xl bg-indigo-500 px-6 py-3 font-medium text-white transition hover:bg-indigo-400 active:scale-95">
-          Search
-        </button>
+      <!-- Tabs: text->image vs image->image -->
+      <div class="mb-4 inline-flex rounded-xl border border-white/10 bg-black/30 p-1 text-sm">
+        <button data-tab="text" class="tab-btn rounded-lg px-4 py-1.5">🔤 Search by text</button>
+        <button data-tab="image" class="tab-btn rounded-lg px-4 py-1.5">🖼️ Search by image</button>
       </div>
 
-      <!-- Search-by-image (image -> image). Text -> image is the default via the box above. -->
-      <div class="mt-3 flex flex-wrap items-center gap-2 text-sm">
-        <span class="text-slate-400">Type text above, or</span>
-        <label class="cursor-pointer rounded-lg border border-white/10 bg-black/30 px-3 py-1.5 text-slate-300 transition hover:border-fuchsia-400/50 hover:text-white">
-          ⬆ Search by image
+      <!-- Text panel -->
+      <div id="panel-text">
+        <div class="flex flex-col gap-3 sm:flex-row">
+          <input id="q" type="text" autocomplete="off"
+            placeholder="e.g. a dog on the beach, a red car, city at night…"
+            class="flex-1 rounded-xl border border-white/10 bg-black/30 px-4 py-3 text-base outline-none placeholder:text-slate-500 focus:border-indigo-400/60 focus:ring-2 focus:ring-indigo-500/30" />
+          <button id="go"
+            class="rounded-xl bg-indigo-500 px-6 py-3 font-medium text-white transition hover:bg-indigo-400 active:scale-95">
+            Search
+          </button>
+        </div>
+        <div class="mt-3 flex flex-wrap gap-2">
+          <span class="text-xs text-slate-500 self-center">Try:</span>
+          <button class="chip">green nature landscape</button>
+          <button class="chip">black and white photo</button>
+          <button class="chip">a building</button>
+        </div>
+      </div>
+
+      <!-- Image panel -->
+      <div id="panel-image" class="hidden">
+        <label class="flex cursor-pointer flex-col items-center justify-center gap-2 rounded-xl border border-dashed border-white/15 bg-black/20 px-6 py-8 text-center transition hover:border-fuchsia-400/50">
+          <span class="text-2xl">⬆</span>
+          <span class="text-slate-200">Upload an image to find visually similar ones</span>
+          <span class="text-xs text-slate-500">JPG / PNG / WEBP — embedded with CLIP, then matched by cosine similarity</span>
           <input id="upload" type="file" accept="image/*" class="hidden" />
         </label>
-        <span class="text-slate-500">— then click <span class="text-slate-300">Similar</span> on any result to keep exploring.</span>
       </div>
 
-      <!-- Example chips -->
-      <div class="mt-3 flex flex-wrap gap-2">
-        <span class="text-xs text-slate-500 self-center">Try:</span>
-        <button class="chip">green nature landscape</button>
-        <button class="chip">black and white photo</button>
-        <button class="chip">a building</button>
-      </div>
+      <!-- "Similar" explainer — applies to both tabs -->
+      <p class="mt-3 border-t border-white/5 pt-3 text-xs text-slate-500">
+        💡 <span class="text-slate-300">Similar</span>: click the <span class="text-slate-300">Similar</span>
+        button on any result to search using that image itself — a fast way to keep exploring related pictures.
+      </p>
     </div>
 
     <!-- Status line -->
@@ -85,6 +98,20 @@
   <script>
     const $ = (s) => document.querySelector(s);
     const grid = $('#grid'), statusEl = $('#status');
+
+    // ---- tabs: text vs image ----
+    function setTab(tab) {
+      $('#panel-text').classList.toggle('hidden', tab !== 'text');
+      $('#panel-image').classList.toggle('hidden', tab !== 'image');
+      document.querySelectorAll('.tab-btn').forEach((b) => {
+        const on = b.dataset.tab === tab;
+        b.className = 'tab-btn rounded-lg px-4 py-1.5 transition ' +
+          (on ? 'bg-indigo-500 text-white' : 'text-slate-400 hover:text-white');
+      });
+      if (tab === 'text') $('#q').focus();
+    }
+    document.querySelectorAll('.tab-btn').forEach((b) =>
+      b.addEventListener('click', () => setTab(b.dataset.tab)));
 
     // example chips
     document.querySelectorAll('.chip').forEach((c) => {
@@ -172,6 +199,7 @@
 
     // ---- init ----
     (async () => {
+      setTab('text');
       try {
         const s = await (await fetch('/api/stats')).json();
         $('#stats').textContent = `· ${s.count} images indexed (${s.model})`;
