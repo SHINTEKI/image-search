@@ -13,6 +13,7 @@ originals are only fetched on demand (e.g. when a user opens one).
 """
 from __future__ import annotations
 
+import contextlib
 import io
 
 from fastapi import FastAPI, File, HTTPException, Query, UploadFile
@@ -23,16 +24,19 @@ from PIL import Image, ImageOps
 from . import config
 from .search import SearchIndex
 
-app = FastAPI(title="Image Semantic Search")
-
 _index: SearchIndex | None = None
 
 
-@app.on_event("startup")
-def _startup() -> None:
+@contextlib.asynccontextmanager
+async def lifespan(app: FastAPI):
+    # Load the search index once at startup (the CLIP model loads lazily on first query).
     global _index
     _index = SearchIndex()
     print(f"Loaded index: {_index.count} images ({_index.model_name}).")
+    yield
+
+
+app = FastAPI(title="Image Semantic Search", lifespan=lifespan)
 
 
 def index() -> SearchIndex:
@@ -85,8 +89,8 @@ async def api_upload(file: UploadFile = File(...), top_k: int = Query(24, ge=1, 
 @app.get("/thumb/{name}")
 def thumb(name: str) -> FileResponse:
     path = (config.THUMBS_DIR / name).resolve()
-    # Prevent path traversal outside the thumbs dir.
-    if config.THUMBS_DIR.resolve() not in path.parents or not path.exists():
+    # Prevent path traversal: the resolved path must stay inside the thumbs dir.
+    if not path.is_relative_to(config.THUMBS_DIR.resolve()) or not path.exists():
         raise HTTPException(404, "Not found")
     return FileResponse(path, media_type="image/jpeg", headers={"Cache-Control": "public, max-age=86400"})
 
@@ -97,7 +101,7 @@ def image(image_id: int) -> FileResponse:
     if image_id < 0 or image_id >= idx.count:
         raise HTTPException(404, "Unknown image id")
     path = (config.IMAGES_DIR / idx.images[image_id]["path"]).resolve()
-    if config.IMAGES_DIR.resolve() not in path.parents or not path.exists():
+    if not path.is_relative_to(config.IMAGES_DIR.resolve()) or not path.exists():
         raise HTTPException(404, "Not found")
     return FileResponse(path)
 

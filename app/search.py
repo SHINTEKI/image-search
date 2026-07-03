@@ -52,6 +52,8 @@ class SearchIndex:
 
     def search_by_id(self, image_id: int, top_k: int = 24) -> list[dict]:
         """Find images similar to an already-indexed image (click-to-similar)."""
+        if not 0 <= image_id < self.count:
+            raise IndexError(f"image_id {image_id} out of range [0, {self.count})")
         vec = self.matrix[image_id]
         return self._rank(vec, top_k, exclude=image_id)
 
