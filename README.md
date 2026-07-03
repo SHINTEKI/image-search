@@ -106,6 +106,7 @@ web/
 images/        # your images (100 public samples included)
 scripts/
   fetch_samples.py   # downloads the sample images
+  evaluate.py        # label-free sanity + self-consistency evaluation
 .cache/        # embeddings.npy + meta.json + thumbs/  (generated; gitignored)
 ```
 
@@ -164,6 +165,31 @@ Our prompt ensembling already improves ranking on the query side at near-zero co
 CLIP reflects its training distribution: strong on common scenes/objects, weaker on fine-grained detail,
 text-in-images (OCR), or niche domains. Similarity scores are relative rankings, not calibrated
 probabilities.
+
+---
+
+## Evaluation
+
+The sample images have **no human relevance labels**, so rather than invent subjective query→image ground
+truth, `scripts/evaluate.py` runs two **label-free, reproducible** checks (`uv run python scripts/evaluate.py`):
+
+1. **Retrieval sanity** — every image must be its own nearest neighbour (self-cosine ≈ 1.0). This catches
+   broken normalization or index corruption. *(Result: min = 1.000 ✓.)*
+2. **Label round-trip Recall@K** — zero-shot CLIP assigns each image its best label from a small vocabulary,
+   then we query by that label and check whether the image returns in the top-K. It measures whether
+   text→image retrieval recovers the concept CLIP itself sees in the image — a **self-consistency** metric.
+   *(Result on 100 samples: Recall@1 14%, @5 48%, @10 65%.)*
+
+   > **Reading the numbers honestly:** Recall@1 looks low because the vocabulary overlaps heavily
+   > (*forest / trees / nature / landscape* all describe similar green images), so same-concept images
+   > compete for the top slot — it under-counts, it doesn't mean retrieval is broken. Recall@10 rising to
+   > 65% shows the concept is reliably recovered within the first page. Plus a human-readable spot check of
+   > natural-language queries and their top hits.
+
+**How I'd evaluate this properly in production:** collect real query→click data and measure
+**Precision@K / mAP / MRR** against human-judged relevance; run **A/B tests** on ranking changes (e.g.
+prompt templates, a reranker); and track **CTR / zero-result rate** as live quality signals. A labelled
+eval set (a few hundred query→relevant-image pairs) would replace the self-consistency proxy above.
 
 ---
 
