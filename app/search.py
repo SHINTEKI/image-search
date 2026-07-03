@@ -68,14 +68,3 @@ class SearchIndex:
     def search_by_vector(self, vec: np.ndarray, top_k: int = 24) -> list[dict]:
         """Find images similar to an arbitrary embedding (uploaded image)."""
         return self._rank(vec, top_k)
-
-    def search_keyword(self, query: str, top_k: int = 24) -> list[dict]:
-        """Plain filename substring match — a non-semantic baseline for contrast."""
-        q = query.lower().strip()
-        results = []
-        for item in self.images:
-            if q and q in item["filename"].lower():
-                out = dict(item)
-                out["score"] = 1.0
-                results.append(out)
-        return results[:top_k]

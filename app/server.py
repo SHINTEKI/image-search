@@ -1,7 +1,7 @@
 """FastAPI backend for image semantic search.
 
 Startup loads the search index (and, lazily, the CLIP model) once. Endpoints:
-  GET  /api/search?q=...&method=semantic|keyword   -> text or filename search
+  GET  /api/search?q=...                            -> natural-language (text -> image) search
   GET  /api/similar?id=N                            -> images similar to indexed image N
   POST /api/upload  (multipart image)               -> images similar to an uploaded image
   GET  /thumb/{name}                                -> cached thumbnail (small, fast, cheap)
@@ -54,15 +54,11 @@ def stats() -> dict:
 @app.get("/api/search")
 def api_search(
     q: str = Query(..., min_length=1),
-    method: str = Query("semantic"),
     top_k: int = Query(24, ge=1, le=100),
 ) -> JSONResponse:
-    idx = index()
-    if method == "keyword":
-        results = idx.search_keyword(q, top_k)
-    else:
-        results = idx.search_text(q, top_k)
-    return JSONResponse({"method": method, "query": q, "results": results})
+    """Natural-language (text -> image) semantic search."""
+    results = index().search_text(q, top_k)
+    return JSONResponse({"query": q, "results": results})
 
 
 @app.get("/api/similar")

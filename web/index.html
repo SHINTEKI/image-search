@@ -50,15 +50,14 @@
         </button>
       </div>
 
-      <!-- Method toggle + upload -->
+      <!-- Search-by-image (image -> image). Text -> image is the default via the box above. -->
       <div class="mt-3 flex flex-wrap items-center gap-2 text-sm">
-        <span class="text-slate-400">Method:</span>
-        <button data-method="semantic" class="method-btn rounded-lg px-3 py-1.5">Semantic</button>
-        <button data-method="keyword" class="method-btn rounded-lg px-3 py-1.5">Keyword</button>
-        <label class="ml-auto cursor-pointer rounded-lg border border-white/10 bg-black/30 px-3 py-1.5 text-slate-300 transition hover:border-fuchsia-400/50 hover:text-white">
+        <span class="text-slate-400">Type text above, or</span>
+        <label class="cursor-pointer rounded-lg border border-white/10 bg-black/30 px-3 py-1.5 text-slate-300 transition hover:border-fuchsia-400/50 hover:text-white">
           ⬆ Search by image
           <input id="upload" type="file" accept="image/*" class="hidden" />
         </label>
+        <span class="text-slate-500">— then click <span class="text-slate-300">Similar</span> on any result to keep exploring.</span>
       </div>
 
       <!-- Example chips -->
@@ -86,20 +85,8 @@
   </div>
 
   <script>
-    const state = { method: 'semantic' };
     const $ = (s) => document.querySelector(s);
     const grid = $('#grid'), statusEl = $('#status');
-
-    // ---- method toggle styling ----
-    function paintMethods() {
-      document.querySelectorAll('.method-btn').forEach((b) => {
-        const on = b.dataset.method === state.method;
-        b.className = 'method-btn rounded-lg px-3 py-1.5 transition ' +
-          (on ? 'bg-indigo-500 text-white' : 'bg-black/30 text-slate-300 hover:text-white border border-white/10');
-      });
-    }
-    document.querySelectorAll('.method-btn').forEach((b) =>
-      b.addEventListener('click', () => { state.method = b.dataset.method; paintMethods(); }));
 
     // example chips
     document.querySelectorAll('.chip').forEach((c) => {
@@ -152,9 +139,9 @@
     async function runSearch() {
       const q = $('#q').value.trim();
       if (!q) return;
-      statusEl.textContent = `Searching (${state.method}) for “${q}”…`;
+      statusEl.textContent = `Searching for “${q}”…`;
       const t0 = performance.now();
-      const res = await fetch(`/api/search?q=${encodeURIComponent(q)}&method=${state.method}`);
+      const res = await fetch(`/api/search?q=${encodeURIComponent(q)}`);
       const data = await res.json();
       statusEl.textContent = `${data.results.length} results for “${q}” · ${(performance.now() - t0).toFixed(0)} ms`;
       render(data.results);
@@ -187,7 +174,6 @@
 
     // ---- init ----
     (async () => {
-      paintMethods();
       try {
         const s = await (await fetch('/api/stats')).json();
         $('#stats').textContent = `· ${s.count} images indexed (${s.model})`;
