@@ -13,6 +13,19 @@ import numpy as np
 
 from . import config
 
+# CLIP was trained on caption-style text ("a photo of a dog"), not bare words
+# ("dog"), so wrapping the query in prompt templates and averaging the resulting
+# embeddings (prompt ensembling, from the CLIP paper) makes queries land better
+# in the model's distribution. The plain "{}" template keeps full-sentence
+# queries from being over-wrapped.
+PROMPT_TEMPLATES = (
+    "a photo of {}.",
+    "a photo of a {}.",
+    "a close-up photo of {}.",
+    "a photo containing {}.",
+    "{}",
+)
+
 
 class SearchIndex:
     def __init__(self) -> None:
@@ -52,11 +65,17 @@ class SearchIndex:
                 break
         return results
 
-    def search_text(self, query: str, top_k: int = 24) -> list[dict]:
+    def _embed_query(self, query: str) -> np.ndarray:
+        """Embed a text query with prompt ensembling -> one L2-normalized vector."""
         from .model import get_model
 
-        vec = get_model().encode_text([query])[0]
-        return self._rank(vec, top_k)
+        prompts = [t.format(query) for t in PROMPT_TEMPLATES]
+        vecs = get_model().encode_text(prompts)  # (T, D), each row normalized
+        vec = vecs.mean(axis=0)                  # ensemble = mean of prompt embeddings
+        return vec / np.linalg.norm(vec)         # renormalize so dot == cosine
+
+    def search_text(self, query: str, top_k: int = 24) -> list[dict]:
+        return self._rank(self._embed_query(query), top_k)
 
     def search_by_id(self, image_id: int, top_k: int = 24) -> list[dict]:
         """Find images similar to an already-indexed image (click-to-similar)."""
