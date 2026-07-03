@@ -1,6 +1,6 @@
 """FastAPI backend for image semantic search.
 
-Startup loads the search index (and, lazily, the CLIP model) once. Endpoints:
+Startup loads the search index and warms up the CLIP model once. Endpoints:
   GET  /api/search?q=...                            -> natural-language (text -> image) search
   GET  /api/similar?id=N                            -> images similar to indexed image N
   POST /api/upload  (multipart image)               -> images similar to an uploaded image
@@ -29,10 +29,14 @@ _index: SearchIndex | None = None
 
 @contextlib.asynccontextmanager
 async def lifespan(app: FastAPI):
-    # Load the search index once at startup (the CLIP model loads lazily on first query).
+    # Load the index and warm up the CLIP model at startup, so the very first
+    # query is fast (no lazy-load stall on the first request).
+    from .model import get_model
+
     global _index
     _index = SearchIndex()
-    print(f"Loaded index: {_index.count} images ({_index.model_name}).")
+    get_model()  # preload CLIP weights now instead of on first search
+    print(f"Loaded index: {_index.count} images ({_index.model_name}); model ready.")
     yield
 
 
