@@ -8,7 +8,8 @@ and get the most relevant images back in milliseconds, through a clean, beautifu
 ![Backend](https://img.shields.io/badge/backend-FastAPI-009688)
 ![No API key](https://img.shields.io/badge/cost-%240%20%2F%20offline-22c55e)
 
-> 🎥 **Demo video:** see [`demo/`](demo/) — `demo/demo.md` has the recording script and a link/embed slot.
+> ## 🎥 [**▶ Watch the demo video**](https://drive.google.com/file/d/1F6mjKEvNoCLblKqF9TNx_sXfT7dBPFJw/view?usp=sharing)
+> A short walkthrough of text search, image search, and find-similar.
 
 ---
 
