@@ -29,10 +29,6 @@ class ClipModel:
         self.model.eval().to(self.device)
         self.tokenizer = open_clip.get_tokenizer(config.MODEL_NAME)
 
-    @property
-    def dim(self) -> int:
-        return self.model.text_projection.shape[1]
-
     @torch.no_grad()
     def encode_images(self, images: Iterable[Image.Image]) -> np.ndarray:
         """Embed PIL images -> (N, D) float32 array, L2-normalized rows."""
