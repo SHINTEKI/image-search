@@ -1,0 +1,200 @@
+<!doctype html>
+<html lang="en" class="dark">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Image Semantic Search</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script>
+    tailwind.config = { darkMode: 'class' };
+  </script>
+  <style>
+    /* Subtle radial glow backdrop for a modern, premium dark look. */
+    body {
+      background:
+        radial-gradient(1200px 600px at 15% -10%, rgba(99, 102, 241, 0.18), transparent 60%),
+        radial-gradient(1000px 500px at 100% 0%, rgba(236, 72, 153, 0.12), transparent 55%),
+        #0a0a0f;
+    }
+    .card { transition: transform .18s ease, box-shadow .18s ease; }
+    .card:hover { transform: translateY(-4px); box-shadow: 0 12px 40px rgba(0,0,0,.5); }
+    .fade-in { animation: fade .35s ease both; }
+    @keyframes fade { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: none; } }
+    ::-webkit-scrollbar { width: 10px; height: 10px; }
+    ::-webkit-scrollbar-thumb { background: #26263a; border-radius: 8px; }
+  </style>
+</head>
+<body class="min-h-screen text-slate-100 antialiased">
+  <div class="mx-auto max-w-6xl px-5 py-10">
+
+    <!-- Header -->
+    <header class="mb-8 text-center">
+      <h1 class="text-4xl font-bold tracking-tight bg-gradient-to-r from-indigo-300 via-fuchsia-300 to-sky-300 bg-clip-text text-transparent">
+        Image Semantic Search
+      </h1>
+      <p class="mt-2 text-slate-400">
+        Search a folder of images with natural language, powered by CLIP.
+        <span id="stats" class="text-slate-500"></span>
+      </p>
+    </header>
+
+    <!-- Search bar -->
+    <div class="rounded-2xl border border-white/10 bg-white/5 p-4 backdrop-blur">
+      <div class="flex flex-col gap-3 sm:flex-row">
+        <input id="q" type="text" autocomplete="off"
+          placeholder="e.g. a dog on the beach, a red car, city at night…"
+          class="flex-1 rounded-xl border border-white/10 bg-black/30 px-4 py-3 text-base outline-none placeholder:text-slate-500 focus:border-indigo-400/60 focus:ring-2 focus:ring-indigo-500/30" />
+        <button id="go"
+          class="rounded-xl bg-indigo-500 px-6 py-3 font-medium text-white transition hover:bg-indigo-400 active:scale-95">
+          Search
+        </button>
+      </div>
+
+      <!-- Method toggle + upload -->
+      <div class="mt-3 flex flex-wrap items-center gap-2 text-sm">
+        <span class="text-slate-400">Method:</span>
+        <button data-method="semantic" class="method-btn rounded-lg px-3 py-1.5">Semantic</button>
+        <button data-method="keyword" class="method-btn rounded-lg px-3 py-1.5">Keyword</button>
+        <label class="ml-auto cursor-pointer rounded-lg border border-white/10 bg-black/30 px-3 py-1.5 text-slate-300 transition hover:border-fuchsia-400/50 hover:text-white">
+          ⬆ Search by image
+          <input id="upload" type="file" accept="image/*" class="hidden" />
+        </label>
+      </div>
+
+      <!-- Example chips -->
+      <div class="mt-3 flex flex-wrap gap-2">
+        <span class="text-xs text-slate-500 self-center">Try:</span>
+        <button class="chip">green nature landscape</button>
+        <button class="chip">black and white photo</button>
+        <button class="chip">a building</button>
+        <button class="chip">people</button>
+        <button class="chip">water and sky</button>
+      </div>
+    </div>
+
+    <!-- Status line -->
+    <p id="status" class="mt-6 text-center text-sm text-slate-400"></p>
+
+    <!-- Results grid -->
+    <div id="grid" class="mt-4 grid grid-cols-2 gap-4 sm:grid-cols-3 lg:grid-cols-4"></div>
+  </div>
+
+  <!-- Lightbox -->
+  <div id="lightbox" class="fixed inset-0 z-50 hidden items-center justify-center bg-black/85 p-6 backdrop-blur"
+       onclick="this.classList.add('hidden'); this.classList.remove('flex')">
+    <img id="lightbox-img" class="max-h-[90vh] max-w-full rounded-xl shadow-2xl" />
+  </div>
+
+  <script>
+    const state = { method: 'semantic' };
+    const $ = (s) => document.querySelector(s);
+    const grid = $('#grid'), statusEl = $('#status');
+
+    // ---- method toggle styling ----
+    function paintMethods() {
+      document.querySelectorAll('.method-btn').forEach((b) => {
+        const on = b.dataset.method === state.method;
+        b.className = 'method-btn rounded-lg px-3 py-1.5 transition ' +
+          (on ? 'bg-indigo-500 text-white' : 'bg-black/30 text-slate-300 hover:text-white border border-white/10');
+      });
+    }
+    document.querySelectorAll('.method-btn').forEach((b) =>
+      b.addEventListener('click', () => { state.method = b.dataset.method; paintMethods(); }));
+
+    // example chips
+    document.querySelectorAll('.chip').forEach((c) => {
+      c.className = 'chip rounded-full border border-white/10 bg-black/20 px-3 py-1 text-xs text-slate-300 transition hover:border-indigo-400/50 hover:text-white';
+      c.addEventListener('click', () => { $('#q').value = c.textContent; runSearch(); });
+    });
+
+    // ---- rendering ----
+    function scoreBadge(score) {
+      // Semantic scores are cosine sims (~0.15–0.35). Show as a compact percent-ish hint.
+      if (score == null || score === 1.0) return '';
+      const pct = Math.max(0, Math.min(100, Math.round(score * 100)));
+      return `<span class="absolute right-2 top-2 rounded-md bg-black/70 px-1.5 py-0.5 text-[11px] font-medium text-emerald-300">${pct}%</span>`;
+    }
+
+    function render(results) {
+      grid.innerHTML = '';
+      if (!results.length) {
+        statusEl.textContent = 'No results.';
+        return;
+      }
+      results.forEach((r) => {
+        const el = document.createElement('div');
+        el.className = 'card fade-in group relative cursor-pointer overflow-hidden rounded-xl border border-white/10 bg-white/5';
+        el.innerHTML = `
+          <div class="relative aspect-[4/3] overflow-hidden">
+            <img src="/thumb/${r.thumb}" loading="lazy" alt="${r.filename}"
+                 class="h-full w-full object-cover" />
+            ${scoreBadge(r.score)}
+          </div>
+          <div class="flex items-center justify-between gap-2 px-3 py-2 text-xs">
+            <span class="truncate text-slate-400">${r.filename}</span>
+            <button class="similar-btn shrink-0 rounded-md bg-white/10 px-2 py-1 text-[11px] text-slate-200 hover:bg-fuchsia-500/70">Similar</button>
+          </div>`;
+        el.querySelector('img').addEventListener('click', () => openLightbox(r.id));
+        el.querySelector('.similar-btn').addEventListener('click', (e) => {
+          e.stopPropagation(); findSimilar(r.id, r.filename);
+        });
+        grid.appendChild(el);
+      });
+    }
+
+    function openLightbox(id) {
+      $('#lightbox-img').src = `/image/${id}`;
+      $('#lightbox').classList.remove('hidden');
+      $('#lightbox').classList.add('flex');
+    }
+
+    // ---- search actions ----
+    async function runSearch() {
+      const q = $('#q').value.trim();
+      if (!q) return;
+      statusEl.textContent = `Searching (${state.method}) for “${q}”…`;
+      const t0 = performance.now();
+      const res = await fetch(`/api/search?q=${encodeURIComponent(q)}&method=${state.method}`);
+      const data = await res.json();
+      statusEl.textContent = `${data.results.length} results for “${q}” · ${(performance.now() - t0).toFixed(0)} ms`;
+      render(data.results);
+    }
+
+    async function findSimilar(id, name) {
+      statusEl.textContent = `Finding images similar to ${name}…`;
+      const t0 = performance.now();
+      const res = await fetch(`/api/similar?id=${id}`);
+      const data = await res.json();
+      statusEl.textContent = `Similar to ${name} · ${data.results.length} results · ${(performance.now() - t0).toFixed(0)} ms`;
+      render(data.results);
+    }
+
+    $('#upload').addEventListener('change', async (e) => {
+      const file = e.target.files[0];
+      if (!file) return;
+      statusEl.textContent = `Searching by uploaded image “${file.name}”…`;
+      const fd = new FormData();
+      fd.append('file', file);
+      const t0 = performance.now();
+      const res = await fetch('/api/upload', { method: 'POST', body: fd });
+      const data = await res.json();
+      statusEl.textContent = `Similar to uploaded “${file.name}” · ${data.results.length} results · ${(performance.now() - t0).toFixed(0)} ms`;
+      render(data.results);
+    });
+
+    $('#go').addEventListener('click', runSearch);
+    $('#q').addEventListener('keydown', (e) => { if (e.key === 'Enter') runSearch(); });
+
+    // ---- init ----
+    (async () => {
+      paintMethods();
+      try {
+        const s = await (await fetch('/api/stats')).json();
+        $('#stats').textContent = `· ${s.count} images indexed (${s.model})`;
+      } catch {}
+      $('#q').value = 'green nature landscape';
+      runSearch();
+    })();
+  </script>
+</body>
+</html>
